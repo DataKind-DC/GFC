@@ -1,4 +1,8 @@
 # GFC
+
+~Please do not make any changes to files in the Raw Data folder~ 
+~Upload modified/joined data to New Data folder
+
 Global Fund for Children
 Project Statement
 
