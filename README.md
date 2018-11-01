@@ -1,9 +1,12 @@
 # GFC
 
 !!Please do not make any changes to files in the Raw Data folder!!
+
 !!Upload modified/joined data to New Data folder!!
 
+
 Global Fund for Children
+
 Project Statement
 
  “Global Fund for Children wants to use data on the organizational development of grantee partners and inputs provided by GFC during the course of the funding relationship to better understand the link between the services and funding provided and self-reported changes in organizational health. This will assist GFC to better understand which interventions are most successful at contributing to positive organizational changes. As a result, GFC can more effectively target services to enable organizations that aim to improve the lives of children and youth affected by poverty, injustice and discrimination worldwide to be more effective at their work.”
