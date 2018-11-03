@@ -1,13 +1,29 @@
-
-
-
 library(tidyverse)
+library(dplyr)
+library(plyr) # for mapvalues
 library(magrittr)
 library(openxlsx)
-grants2000 = read.xlsx("../Raw Data (dont edit)/All grants data since 2000 September 20.xlsx")
-oci_generator<-read.xlsx("../Raw Data (dont edit)/OCI_Generator for Datakind.xlsm", sheet = "GrantData", detectDates = TRUE)
-activity = read.xlsx("../Raw Data (dont edit)/Data Export of Activity Inputs September 10.xlsx", detectDates = TRUE)
-awards = read.xlsx("../Raw Data (dont edit)/Major Awards Spreadsheet.xlsx", sheet = "Awards_Data")
+library(lubridate)
+DATA_DIR<-"../Raw Data (dont edit)/"
+grants2000<-read.xlsx(paste(DATA_DIR,
+                            "All grants data since 2000 September 20.xlsx",
+                            sep=""),
+                      detectDates = T)
+oci_generator<-read.xlsx(paste(DATA_DIR,
+                               "OCI_Generator for Datakind.xlsm",
+                               sep=""),
+                         sheet = "GrantData", detectDates = T)
+activity<-read.xlsx(paste(DATA_DIR,
+                          "Data Export of Activity Inputs September 10.xlsx",
+                          sep=""),
+                    detectDates = TRUE)
+rankActivities<-read.xlsx(paste(DATA_DIR,
+                                "Ranking of GFC inputs.xlsx",
+                                sep=""))
+awards<-read.xlsx(paste(DATA_DIR,
+                        "Major Awards Spreadsheet.xlsx",
+                        sep=""),
+                  sheet = "Awards_Data")
 joinThenClean<-function(df1, df2) {
   # df1 is read from All grants data since 2000 September 20.xlsx
   # df2 is read from the GrantData/2nd sheet of OCI_Generator for Datakind.xlsm
@@ -81,19 +97,56 @@ joinThenClean<-function(df1, df2) {
   return(secondJoin)
 }
 
-spread_activity_data= function(activity){
-   activity%>%
-     arrange(Done.Date)%>%
-     group_by(Org.Name)%>%
-     mutate(visit_num = row_number())%>%
-    split(.$visit_num)->list
+rankActivities<-rankActivities %>%
+  mutate(GFC.input = trimws(GFC.input),
+         activityWeight=rev(seq(nrow(rankActivities))))
+rankActivities$activityWeight[nrow(rankActivities)]<-2
+
+spread_activity_data= function(dfActivity){
+  dfActivity$Capacity.Building.Type<-dfActivity$Capacity.Building.Type %>%
+    mapvalues(c("E-mail", "Grantee-Led Convening Participation",
+                "Site Visit", "Additional Touch"),
+              c("Email", "Grantee Partner-Led Convening Participation",
+                "Monitoring Site Visit",
+                "Meeting that is not a site visit or at a KE"))
+  dfActivity<-full_join(dfActivity,
+                        rankActivities %>% select(-Rank),
+                        by=c("Capacity.Building.Type"=
+                               "GFC.input"))
+  if(is.na(dfActivity$activityWeight) %>% any)
+    dfActivity$activityWeight<-dfActivity$activityWeight %>% mapvalues(NA, 1)
   
-  df<-list[[1]]
-  for(i in 2:length(list)){
-    df<-df%>%left_join(list[[i]]%>%select(-visit_num), by = "Org.Name", suffix = c("", sprintf(".%i", i)))
+  detach("package:plyr", unload=TRUE) # required or row_number will not work
+  withVisitNums<-dfActivity %>%
+    arrange(Done.Date) %>%
+    group_by(Org.Name) %>%
+    mutate(yearDone=lubridate::year(Done.Date),
+           visit_num = row_number())
+  
+  dfAnnualPts<-withVisitNums %>%
+    ungroup() %>%
+    arrange(Org.Name, visit_num) %>%
+    group_by(Org.Name, yearDone) %>%
+    dplyr::summarise(annualActivityPts = sum(activityWeight))
+    # required to specify dplyr since dplyr has a summarise, too
+  withVisitNums<-full_join(withVisitNums, dfAnnualPts,
+                           by=c("Org.Name", "yearDone"))
+  withVisitNums<-withVisitNums %>%
+    select(-c(activityWeight, yearDone))
+  
+  listByVisitNum<-withVisitNums %>% split(.$visit_num)
+  df<-listByVisitNum[[1]]
+  for(i in 2:length(listByVisitNum)){
+    df<-df%>%
+      left_join(listByVisitNum[[i]]%>%
+                  select(-c(visit_num)),
+                by = "Org.Name",
+                suffix = c("", sprintf(".%i", i)))
   }
   names(df)[2:6]<-names(df)[2:6]%>%paste0(.,".1")
-
+  df<-df %>%
+    select(-visit_num)
+  
   return(df)
 }
 
@@ -114,17 +167,15 @@ spread_awards_data= function(awards){
   return(df)
 }
 
-awards_data<-spread_awards_data(awards)
 activity_data<-spread_activity_data(activity)
+awards_data<-spread_awards_data(awards)
 
 joined_data<-joinThenClean(grants2000, oci_generator)
 
 joined_data%<>%left_join(activity_data, by = "Org.Name")%>%
-               left_join(awards_data, by = c("Org.Name" = "Grantee.Organization"))
+  left_join(awards_data, by = c("Org.Name" = "Grantee.Organization"))
 
 # missing_awards<-awards_data%>%filter(! Grantee.Organization %in% grants2000$Org.Name)
 # missing_visits<-activity_data%>%filter(! Org.Name %in% grants2000$Org.Name)
 
 write_csv(joined_data, path = "../New Data/joined_data.csv")
-
-
