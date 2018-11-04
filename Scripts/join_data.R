@@ -1,6 +1,5 @@
 library(tidyverse)
 library(dplyr)
-library(plyr) # for mapvalues
 library(magrittr)
 library(openxlsx)
 library(lubridate)
@@ -21,9 +20,24 @@ rankActivities<-read.xlsx(paste(DATA_DIR,
                                 "Ranking of GFC inputs.xlsx",
                                 sep=""))
 awards<-read.xlsx(paste(DATA_DIR,
-                        "Major Awards Spreadsheet.xlsx",
+                        "Major Awards Spreadsheet Normalized.xlsx",
                         sep=""),
                   sheet = "Awards_Data")
+fnPBS<-function(x)  {
+  return(grepl("New Heroes",x,ignore.case=T) & grepl("PBS", x,ignore.case=T))
+}
+pbsLarger<-Filter(fnPBS, awards$Award.Name) %>% unique()
+pbsLarger<-pbsLarger[1]
+
+topTierAwards<-read.xlsx(paste(DATA_DIR,
+                               "Top Awards.xlsx",
+                               sep=""))
+pbsTop<-Filter(fnPBS, topTierAwards %>% unlist())
+pbsTop<-pbsTop[1]
+topTierAwards<-topTierAwards %>% unlist() %>% trimws() %>% tolower()
+
+awards$Award.Name<-gsub(pbsLarger, pbsTop, awards$Award.Name)
+
 joinThenClean<-function(df1, df2) {
   # df1 is read from All grants data since 2000 September 20.xlsx
   # df2 is read from the GrantData/2nd sheet of OCI_Generator for Datakind.xlsm
@@ -103,20 +117,33 @@ rankActivities<-rankActivities %>%
 rankActivities$activityWeight[nrow(rankActivities)]<-2
 
 spread_activity_data= function(dfActivity){
-  dfActivity$Capacity.Building.Type<-dfActivity$Capacity.Building.Type %>%
-    mapvalues(c("E-mail", "Grantee-Led Convening Participation",
-                "Site Visit", "Additional Touch"),
-              c("Email", "Grantee Partner-Led Convening Participation",
+  # bypassing plyr::mapvalues; plyr can complicate row_numbers()
+  keyValReplace<-data.frame(
+    exportNames=c("E-mail","Grantee-Led Convening Participation",
+                  "Site Visit", "Additional Touch"),
+    rankNames=c("Email","Grantee Partner-Led Convening Participation",
                 "Monitoring Site Visit",
-                "Meeting that is not a site visit or at a KE"))
+                "Meeting that is not a site visit or at a KE")
+  )
+  stopifnot(!any(is.na(keyValReplace)))
+  eventsUpdated<-dfActivity$Capacity.Building.Type
+  for(k in seq(nrow(keyValReplace)))  {
+    eventsUpdated<-gsub(keyValReplace$exportNames[k],
+                        keyValReplace$rankNames[k],
+                        eventsUpdated)
+  }
+  dfActivity$Capacity.Building.Type<-eventsUpdated
   dfActivity<-full_join(dfActivity,
                         rankActivities %>% select(-Rank),
                         by=c("Capacity.Building.Type"=
                                "GFC.input"))
-  if(is.na(dfActivity$activityWeight) %>% any)
-    dfActivity$activityWeight<-dfActivity$activityWeight %>% mapvalues(NA, 1)
+  # assign any activity labels that do not appear in
+  # Ranking of GFC inputs.xlsx to a value of 1
+  if(is.na(dfActivity$activityWeight) %>% any)  {
+    idxNA<-which(is.na(dfActivity$activityWeight))
+    dfActivity$activityWeight[idxNA]<-1
+  }
   
-  detach("package:plyr", unload=TRUE) # required or row_number will not work
   withVisitNums<-dfActivity %>%
     arrange(Done.Date) %>%
     group_by(Org.Name) %>%
@@ -128,7 +155,7 @@ spread_activity_data= function(dfActivity){
     arrange(Org.Name, visit_num) %>%
     group_by(Org.Name, yearDone) %>%
     dplyr::summarise(annualActivityPts = sum(activityWeight))
-    # required to specify dplyr since dplyr has a summarise, too
+  # required to specify dplyr since dplyr has a summarise, too
   withVisitNums<-full_join(withVisitNums, dfAnnualPts,
                            by=c("Org.Name", "yearDone"))
   withVisitNums<-withVisitNums %>%
@@ -136,6 +163,7 @@ spread_activity_data= function(dfActivity){
   
   listByVisitNum<-withVisitNums %>% split(.$visit_num)
   df<-listByVisitNum[[1]]
+  df<-df %>% select(-visit_num)
   for(i in 2:length(listByVisitNum)){
     df<-df%>%
       left_join(listByVisitNum[[i]]%>%
@@ -143,15 +171,15 @@ spread_activity_data= function(dfActivity){
                 by = "Org.Name",
                 suffix = c("", sprintf(".%i", i)))
   }
-  names(df)[2:6]<-names(df)[2:6]%>%paste0(.,".1")
-  df<-df %>%
-    select(-visit_num)
-  
+  idxLower<-which(names(df)=="Org.Name")
+  idxUpper<-which(names(df)=="Capacity.Building.Type.2")
+  namesFirst<-names(df)[seq(idxLower+1, idxUpper-1)]
+  names(df)[seq(idxLower+1, idxUpper-1)]<-namesFirst%>%paste0(.,".1")
   return(df)
 }
 
-spread_awards_data= function(awards){
-  awards%>%
+spread_awards_data= function(dfAwards){
+  dfAwards%>%
     arrange(Awarded.By)%>%
     group_by(Grantee.Organization)%>%
     mutate(award_num = row_number())%>%
@@ -159,7 +187,9 @@ spread_awards_data= function(awards){
   
   df<-list[[1]]%>%select(-award_num)
   for(i in 2:length(list)){
-    df<-df%>%left_join(list[[i]]%>%select(-award_num), by = "Grantee.Organization", suffix = c("", sprintf(".%i", i)))
+    df<-df%>%left_join(list[[i]]%>%select(-award_num),
+                       by = "Grantee.Organization",
+                       suffix = c("", sprintf(".%i", i)))
   }
   df%<>%select(Grantee.Organization, everything())
   names(df)[2:8]<-names(df)[2:8]%>%paste0(.,".1")
@@ -179,3 +209,22 @@ joined_data%<>%left_join(activity_data, by = "Org.Name")%>%
 # missing_visits<-activity_data%>%filter(! Org.Name %in% grants2000$Org.Name)
 
 write_csv(joined_data, path = "../New Data/joined_data.csv")
+
+## Process top award counts
+countFromTopTier<-awards %>%
+  mutate(modName = Award.Name %>% trimws() %>% tolower()) %>%
+  mutate(isTopAward = modName %in% topTierAwards) %>%
+  group_by(Grantee.Organization) %>%
+  dplyr::summarise(TopAwards = sum(isTopAward),
+                   AllAwards = n())
+allOrgs<-joined_data$Org.Name
+unAwarded<-subset(allOrgs, !is.na(allOrgs) &
+       !(allOrgs %in% countFromTopTier$Grantee.Organization)) %>%
+  unique()
+dfUnawarded<-data.frame(unAwarded, top=0, all=0)
+names(dfUnawarded)<-names(countFromTopTier)
+allOrgsCounts<-rbind(countFromTopTier, dfUnawarded)
+
+stopifnot(all(allOrgsCounts$TopAwards <= allOrgsCounts$AllAwards &
+                allOrgsCounts$TopAwards >= 0))
+write_csv(joined_data, path = "../New Data/award_counts_by_org.csv")
