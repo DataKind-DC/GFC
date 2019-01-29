@@ -1,39 +1,54 @@
+install.packages("openxlsx")
+install.packages("lubridate")
+
+
 ## TODO: fix data type issue with Pending Approved Date
 library(tidyverse)
 library(dplyr)
 library(magrittr)
 library(openxlsx)
 library(lubridate)
-DATA_DIR<-"../Raw Data (dont edit)/"
+
+##Set local directory
+DATA_DIR<-"C:/Users/rcarder/Documents/Dev/GFC/Raw Data (dont edit)/"
+
+
+##Read in files
 grants2000<-read.xlsx(paste(DATA_DIR,
                             "All grants data since 2000 September 20",
                             " - KHYS notes.xlsx",
                             # using modified filesince pattern of labelling seems inconsistent
                             sep=""),
-                      detectDates = T)
+                            detectDates = T)
+
 oci_generator<-read.xlsx(paste(DATA_DIR,
                                "OCI_Generator for Datakind.xlsm",
                                sep=""),
                          sheet = "GrantData", detectDates = T)
+
 activity<-read.xlsx(paste(DATA_DIR,
                           "Data Export of Activity Inputs September 10.xlsx",
                           sep=""),
-                    detectDates = TRUE)
+                          detectDates = TRUE)
+
 rankActivities<-read.xlsx(paste(DATA_DIR,
-                                "Ranking of GFC inputs.xlsx",
-                                sep=""))
+                          "Ranking of GFC inputs.xlsx",
+                          sep=""))
+
 awards<-read.xlsx(paste(DATA_DIR,
-                        "Major Awards Spreadsheet Normalized.xlsx",
-                        sep=""),
-                  sheet = "Awards_Data")
+                         "Major Awards Spreadsheet.xlsx",
+                          sep=""),
+                          sheet = "Awards_Data")
 
 ## Basic cleaning ##
 idxUSmisclassified<-oci_generator$Geographic.Region.Corrected == "Americas" &
   oci_generator$Country=="United States"
+
 usMisclassified<-oci_generator[idxUSmisclassified,]
 usMisclassified$Geographic.Region.Corrected<-"North America"
 oci_generator<-rbind(oci_generator[!idxUSmisclassified,],
                      usMisclassified)
+
 oci_generator<-oci_generator %>% filter(Geographic.Region.Corrected != "0")
 # potentialEmpty<-oci_generator$Geographic.Region.Corrected == "0"
 # emptyRows<-apply(oci_generator[potentialEmpty,], MARGIN=1,
@@ -327,6 +342,7 @@ allOrgsMaster<-allOrgsCounts %>%
   left_join(geoLookup, by=c("Grantee.Organization"="Org.Name"))
 
 write_csv(allOrgsCounts, path = "../New Data/award_counts_by_org.csv")
+
 
 ## TODO: Outcome Target / Actual / "Outcome Old Quantification Type"
 ## Separate by percentages and raw numbers
