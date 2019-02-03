@@ -121,6 +121,38 @@ sum(is.na(ActivityData$Site_Visit) == FALSE)
 
 ## Next steps: join OCI_subset and ActivityData, then run LEAPS data on new combined dataframe to find correlations
 
+##rename the columns so they're easier to work with
+names(OCI_subset)
+colnames(OCI_subset)[colnames(OCI_subset)=="Organization.Name"] <- "Org_Name"
+colnames(OCI_subset)[colnames(OCI_subset)=="Fiscal.Year"] <- "Fiscal_Year"
+names(OCI_subset)
 
 
+## do some data validation to check if the datasets match on the fields of interest
+testdata <- sqldf("Select Org_Name, Fiscal_Year from OCI_subset group by Org_Name, Fiscal_Year")
+summary(testdata)
+summary(sqldf("Select Org_Name, Fiscal_Year from ActivityData group by Org_Name, Fiscal_Year"))
 
+
+summary(sqldf("Select a.Org_Name, a.Fiscal_Year FROM ActivityData AS a INNER JOIN 
+               OCI_subset AS b
+               ON a.Org_Name = b.Org_Name AND a.Fiscal_Year = b.Fiscal_Year"))
+
+summary(sqldf("Select a.Org_Name, a.Fiscal_Year FROM ActivityData AS a OUTER JOIN 
+               OCI_subset AS b
+               ON a.Org_Name = b.Org_Name AND a.Fiscal_Year = b.Fiscal_Year"))
+
+MergedData <- merge(ActivityData,OCI_subset)
+
+MergedData$ActivityCount <- with(MergedData, 
+                                 ifelse(is.na(Site_Visit),0,Site_Visit) 
+                                 + ifelse(is.na(Knowledge_Exchange),0,Knowledge_Exchange) 
+                                 + ifelse(is.na(Leveraging),0,Leveraging)
+                                 + ifelse(is.na(Phone_Call),0,Phone_Call)
+                                 + ifelse(is.na(Email),0,Email)
+                                 + ifelse(is.na(Additional),0,Additional)
+                                 + ifelse(is.na(Legal_Refer),0,Legal_Refer))
+
+
+summary(MergedData)
+stat.desc(MergedData)
