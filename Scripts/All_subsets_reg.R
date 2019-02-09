@@ -116,6 +116,8 @@ sum(MyData2$Capacity_Building_Type == 'Site Visit')
 sum(ActivityData$Site_Visit, na.rm=TRUE)
 sum(is.na(ActivityData$Site_Visit) == FALSE)
 
+ActivityData[is.na(ActivityData)] <- 0
+
 
 
 
@@ -128,23 +130,24 @@ colnames(OCI_subset)[colnames(OCI_subset)=="Fiscal.Year"] <- "Fiscal_Year"
 names(OCI_subset)
 
 
-## do some data validation to check if the datasets match on the fields of interest
-testdata <- sqldf("Select Org_Name, Fiscal_Year from OCI_subset group by Org_Name, Fiscal_Year")
-summary(testdata)
-summary(sqldf("Select Org_Name, Fiscal_Year from ActivityData group by Org_Name, Fiscal_Year"))
+
+##Shifting actitivity data... assumption is that activities imapct following year funding
+
+ActivityDataShift <- ActivityData
+ActivityDataShift$Fiscal_Year <- as.integer(ActivityDataShift$Fiscal_Year) + 1
+
+##Convert all of the merge datasets fiscal year to integer for matching purposes
+
+ActivityData$Fiscal_Year <- as.integer(ActivityData$Fiscal_Year)
+OCI_subset$Fiscal_Year <- as.integer(OCI_subset$Fiscal_Year)
+
+MergedData_noshift <- merge(ActivityData,OCI_subset)
+
+MergedData_shift <- merge(ActivityDataShift,OCI_subset)
 
 
-summary(sqldf("Select a.Org_Name, a.Fiscal_Year FROM ActivityData AS a INNER JOIN 
-               OCI_subset AS b
-               ON a.Org_Name = b.Org_Name AND a.Fiscal_Year = b.Fiscal_Year"))
-
-summary(sqldf("Select a.Org_Name, a.Fiscal_Year FROM ActivityData AS a OUTER JOIN 
-               OCI_subset AS b
-               ON a.Org_Name = b.Org_Name AND a.Fiscal_Year = b.Fiscal_Year"))
-
-MergedData <- merge(ActivityData,OCI_subset)
-
-MergedData$ActivityCount <- with(MergedData, 
+##Create activity count calculated fields for regressions
+MergedData_noshift$ActivityCount <- with(MergedData_noshift,                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               
                                  ifelse(is.na(Site_Visit),0,Site_Visit) 
                                  + ifelse(is.na(Knowledge_Exchange),0,Knowledge_Exchange) 
                                  + ifelse(is.na(Leveraging),0,Leveraging)
@@ -153,6 +156,74 @@ MergedData$ActivityCount <- with(MergedData,
                                  + ifelse(is.na(Additional),0,Additional)
                                  + ifelse(is.na(Legal_Refer),0,Legal_Refer))
 
+MergedData_shift$ActivityCount <- with(MergedData_shift,                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               
+                                         ifelse(is.na(Site_Visit),0,Site_Visit) 
+                                         + ifelse(is.na(Knowledge_Exchange),0,Knowledge_Exchange) 
+                                         + ifelse(is.na(Leveraging),0,Leveraging)
+                                         + ifelse(is.na(Phone_Call),0,Phone_Call)
+                                         + ifelse(is.na(Email),0,Email)
+                                         + ifelse(is.na(Additional),0,Additional)
+                                         + ifelse(is.na(Legal_Refer),0,Legal_Refer))
 
-summary(MergedData)
-stat.desc(MergedData)
+##convert grant amounts to integers
+MergedData_shift$Grant.Amount <- as.integer(MergedData_shift$Grant.Amount)
+MergedData_noshift$Grant.Amount <- as.integer(MergedData_noshift$Grant.Amount)
+
+summary(MergedData_noshift)
+##noshift means unshifted, shift means shifted activity data 
+stat.desc(MergedData_noshift)
+stat.desc(MergedData_shift)
+
+names(MergedData_noshift)
+## Includes outputs: Children Directly Served, OCI data, Outcome Actual, Outcome Target
+## Includes inputs: Grant Amount, Grant Type, Activity Data
+##install.packages("leaps")
+library(leaps)
+
+
+##First attempt saving
+ Children_Served.out <-
+   regsubsets(Children.Served.Directly ~
+       ActivityCount + 
+       Grant.Amount + 
+       #Site_Visit + 
+       Knowledge_Exchange + 
+       Leveraging + 
+       #Leveraging_Amount + 
+       Phone_Call + 
+       Email + 
+       Additional + 
+       Legal_Refer + 
+       Grant.Amount + 
+       Year.of.Funding.Number.Only
+       ,data = MergedData_shift
+       ,method='forward')
+
+
+MergedData_shift$Grant.Amount <- as.integer(MergedData_shift$Grant.Amount)
+
+length(MergedData_shift$Email)
+length(MergedData_shift$Phone_Call)
+length(MergedData_shift$Children.Served.Directly)
+
+Children_Served <- regsubsets( Children.Served.Directly ~  Grant.Amount + ActivityCount + Email + Phone_Call + Knowledge_Exchange
+                               + Leveraging + as.integer(Leveraging_Amount) + Additional + Legal_Refer + Year.of.Funding.Number.Only
+                       ,data=MergedData_shift,method='forward')
+
+plot(Children_Served,scale = "adjr2",main="adjr2")
+## the adjusted R^2 for these variables are bad - not really a fit between the activities and the children directly served
+summary(glm(Children.Served.Directly ~ ActivityCount + Leveraging, data=MergedData_shift))
+
+##summary - children directly served not mondeled well linearly
+
+Children_Served <- regsubsets( Children.Served.Directly ~  Grant.Amount + ActivityCount + Email + Phone_Call + Knowledge_Exchange
+                               + Leveraging + as.integer(Leveraging_Amount) + Additional + Legal_Refer + Year.of.Funding.Number.Only
+                               ,data=MergedData_shift,method='forward')
+
+##summary - children directly served not mondeled well linearly
+
+Outcome_Reg <- regsubsets( Outcome.Actual ~  Grant.Amount + ActivityCount + Email + Phone_Call + Knowledge_Exchange
+                               + Leveraging + as.integer(Leveraging_Amount) + Additional + Legal_Refer + Year.of.Funding.Number.Only
+                               ,data=MergedData_shift,method='forward')
+
+plot(Outcome_Reg,scale = "adjr2",main="adjr2")
