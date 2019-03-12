@@ -5,7 +5,7 @@ if(!require(sqldf))
 if(!require(pastecs))
   install.packages("pastecs")
 
-library(dplyr)
+library(dplyr); library(tidyr)
 
 ##Read in the flat data. You may need to change the filepath below to match your environment
 NEW_DATA_DIR<-"../New Data/"
@@ -20,7 +20,7 @@ names(MyData)
 ## Includes inputs: Grant Amount, Grant Type, 
 ## Includes characteristics: "Region, Country, Org name, Unique ID
 
-## Needs calculation outputs: Budget Increase
+## Needs calculation outputs: Budget Increase 
 
 ## Needs Join inputs: phone calls, emails, additional touchpoints, legal referrals
 
@@ -57,42 +57,104 @@ head(MyData2)
 
 ##Create list of orgs and fiscal years
 
-ActivityData <- sqldf("SELECT Org_Name , Fiscal_Year FROM MyData2 GROUP BY Org_Name, Fiscal_Year")
+ActivityData <- sqldf(
+  paste("SELECT Org_Name, Fiscal_Year FROM MyData2",
+        "GROUP BY Org_Name, Fiscal_Year", sep=" "))
 head(ActivityData)
 ##Create site visit column
-# ActivityData <- sqldf("SELECT a.Org_Name, a.Fiscal_Year, b.Site_Visit from ActivityData AS a LEFT JOIN 
-#                       (SELECT Org_Name, Fiscal_Year, Count(*) AS 'Site_Visit' FROM MyData2 WHERE Capacity_Building_Type = 'Site Visit' GROUP BY Org_Name, Fiscal_Year) AS b
-#                       ON  b.Org_Name = a.Org_Name  AND b.Fiscal_Year = a.Fiscal_Year")
-# ##Create Knowledge Exchange Column
-# ActivityData <- sqldf("SELECT a.Org_Name, a.Fiscal_Year, a.Site_Visit, b.Knowledge_Exchange from ActivityData AS a LEFT JOIN 
-#                       (SELECT Org_Name, Fiscal_Year, Count(*) AS 'Knowledge_Exchange' FROM MyData2 WHERE Capacity_Building_Type = 'Knowledge Exchange Participation' GROUP BY Org_Name, Fiscal_Year) AS b
-#                       ON  b.Org_Name = a.Org_Name  AND b.Fiscal_Year = a.Fiscal_Year")
-# ##Create Leveraging Column
-# ActivityData <- sqldf("SELECT a.Org_Name, a.Fiscal_Year, a.Site_Visit, a.Knowledge_Exchange , b.Leveraging  from ActivityData AS a LEFT JOIN 
-#                       (SELECT Org_Name, Fiscal_Year, Count(*) AS 'Leveraging' FROM MyData2 WHERE Capacity_Building_Type = 'Leveraging' GROUP BY Org_Name, Fiscal_Year) AS b
-#                       ON  b.Org_Name = a.Org_Name  AND b.Fiscal_Year = a.Fiscal_Year")
-# 
-# ##Total Leveraging amount for year - represented in thousands
-# ActivityData <- sqldf("SELECT a.Org_Name, a.Fiscal_Year, a.Site_Visit, a.Knowledge_Exchange , a.Leveraging, b.Leveraging_Amount  from ActivityData AS a LEFT JOIN 
-#                       (SELECT Org_Name, Fiscal_Year, Sum(Leveraging_Amount) AS 'Leveraging_Amount' FROM MyData2 WHERE Capacity_Building_Type = 'Leveraging' GROUP BY Org_Name, Fiscal_Year) AS b
-#                       ON  b.Org_Name = a.Org_Name  AND b.Fiscal_Year = a.Fiscal_Year")
-# ##Create Phone Call Column
-# ActivityData <- sqldf("SELECT a.Org_Name, a.Fiscal_Year, a.Site_Visit, a.Knowledge_Exchange , a.Leveraging, a.Leveraging_Amount, b.Phone_Call from ActivityData AS a LEFT JOIN 
-#                       (SELECT Org_Name, Fiscal_Year, count(*) AS 'Phone_Call' FROM MyData2 WHERE Capacity_Building_Type = 'Phone Call' GROUP BY Org_Name, Fiscal_Year) AS b
-#                       ON  b.Org_Name = a.Org_Name  AND b.Fiscal_Year = a.Fiscal_Year")
-# 
-# ##Create email column
-# ActivityData <- sqldf("SELECT a.Org_Name, a.Fiscal_Year, a.Site_Visit, a.Knowledge_Exchange , a.Leveraging, a.Leveraging_Amount, a.Phone_Call, b.Email from ActivityData AS a LEFT JOIN 
-#                       (SELECT Org_Name, Fiscal_Year, count(*) AS 'Email' FROM MyData2 WHERE Capacity_Building_Type = 'E-mail' GROUP BY Org_Name, Fiscal_Year) AS b
-#                       ON  b.Org_Name = a.Org_Name  AND b.Fiscal_Year = a.Fiscal_Year")
-# ##Create "aditional" column
-# ActivityData <- sqldf("SELECT a.Org_Name, a.Fiscal_Year, a.Site_Visit, a.Knowledge_Exchange , a.Leveraging, a.Leveraging_Amount, a.Phone_Call, a.Email, b.Additional from ActivityData AS a LEFT JOIN 
-#                       (SELECT Org_Name, Fiscal_Year, count(*) AS 'Additional' FROM MyData2 WHERE Capacity_Building_Type = 'Additional Touch' GROUP BY Org_Name, Fiscal_Year) AS b
-#                       ON  b.Org_Name = a.Org_Name  AND b.Fiscal_Year = a.Fiscal_Year")
+##Create site visit column
+ActivityData <- sqldf(
+  paste("SELECT a.Org_Name, a.Fiscal_Year, b.Site_Visit",
+        "from ActivityData AS a LEFT JOIN",
+        "(SELECT Org_Name, Fiscal_Year, Count(*) AS 'Site_Visit'",
+        "FROM MyData2",
+        "WHERE Capacity_Building_Type = 'Site Visit'",
+        "GROUP BY Org_Name, Fiscal_Year) AS b",
+        "ON  b.Org_Name = a.Org_Name  AND b.Fiscal_Year = a.Fiscal_Year",
+        sep=" "))
+##Create Kowledge Exchange Column
+ActivityData <- sqldf(
+  paste("SELECT a.Org_Name, a.Fiscal_Year, a.Site_Visit,",
+        "b.Knowledge_Exchange from ActivityData AS a LEFT JOIN",
+        "(SELECT Org_Name, Fiscal_Year, Count(*) AS 'Knowledge_Exchange'",
+        "FROM MyData2",
+        "WHERE Capacity_Building_Type = 'Knowledge Exchange Participation'",
+        "GROUP BY Org_Name, Fiscal_Year) AS b",
+        "ON  b.Org_Name = a.Org_Name  AND b.Fiscal_Year = a.Fiscal_Year",
+        sep=" "))
+##Create Leveraging Column
+ActivityData <- sqldf(
+  paste("SELECT a.Org_Name, a.Fiscal_Year, a.Site_Visit,",
+        "a.Knowledge_Exchange, b.Leveraging",
+        "from ActivityData AS a LEFT JOIN",
+        "(SELECT Org_Name, Fiscal_Year, Count(*) AS 'Leveraging'",
+        "FROM MyData2",
+        "WHERE Capacity_Building_Type = 'Leveraging'",
+        "GROUP BY Org_Name, Fiscal_Year) AS b",
+        "ON  b.Org_Name = a.Org_Name  AND b.Fiscal_Year = a.Fiscal_Year",
+        sep=" "))
+
+##Total Leveraging amount for year - represented in thousands
+ActivityData <- sqldf(
+  paste("SELECT a.Org_Name, a.Fiscal_Year, a.Site_Visit,",
+        "a.Knowledge_Exchange, a.Leveraging, b.Leveraging_Amount",
+        "from ActivityData AS a LEFT JOIN",
+        "(SELECT Org_Name, Fiscal_Year, Sum(Leveraging_Amount) AS",
+        "'Leveraging_Amount'",
+        "FROM MyData2",
+        "WHERE Capacity_Building_Type = 'Leveraging'",
+        "GROUP BY Org_Name, Fiscal_Year) AS b",
+        "ON  b.Org_Name = a.Org_Name  AND b.Fiscal_Year = a.Fiscal_Year",
+        sep=" "))
+##Create Phone Call Column
+ActivityData <- sqldf(
+  paste("SELECT a.Org_Name, a.Fiscal_Year, a.Site_Visit,",
+        "a.Knowledge_Exchange, a.Leveraging, a.Leveraging_Amount,",
+        "b.Phone_Call",
+        "from ActivityData AS a LEFT JOIN",
+        "(SELECT Org_Name, Fiscal_Year, count(*) AS 'Phone_Call'",
+        "FROM MyData2",
+        "WHERE Capacity_Building_Type = 'Phone Call'",
+        "GROUP BY Org_Name, Fiscal_Year) AS b",
+        "ON  b.Org_Name = a.Org_Name  AND b.Fiscal_Year = a.Fiscal_Year",
+        sep=" "))
+
+##Create email column
+ActivityData <- sqldf(
+  paste("SELECT a.Org_Name, a.Fiscal_Year, a.Site_Visit,",
+        "a.Knowledge_Exchange, a.Leveraging, a.Leveraging_Amount,",
+        "a.Phone_Call, b.Email",
+        "from ActivityData AS a LEFT JOIN",
+        "(SELECT Org_Name, Fiscal_Year, count(*) AS 'Email'",
+        "FROM MyData2",
+        "WHERE Capacity_Building_Type = 'E-mail'",
+        "GROUP BY Org_Name, Fiscal_Year) AS b",
+        "ON  b.Org_Name = a.Org_Name  AND b.Fiscal_Year = a.Fiscal_Year",
+        sep=" "))
+##Create "aditional" column
+ActivityData <- sqldf(
+  paste("SELECT a.Org_Name, a.Fiscal_Year, a.Site_Visit,",
+        "a.Knowledge_Exchange , a.Leveraging, a.Leveraging_Amount,",
+        "a.Phone_Call, a.Email, b.Additional",
+        "from ActivityData AS a LEFT JOIN",
+        "(SELECT Org_Name, Fiscal_Year, count(*) AS 'Additional'",
+        "FROM MyData2",
+        "WHERE Capacity_Building_Type = 'Additional Touch'",
+        "GROUP BY Org_Name, Fiscal_Year) AS b",
+        "ON  b.Org_Name = a.Org_Name  AND b.Fiscal_Year = a.Fiscal_Year",
+        sep=" "))
 ##Create "Legal Referral" column
-ActivityData <- sqldf("SELECT a.Org_Name, a.Fiscal_Year, a.Site_Visit, a.Knowledge_Exchange , a.Leveraging, a.Leveraging_Amount, a.Phone_Call, a.Email, a.Additional,b.Legal_Refer from ActivityData AS a LEFT JOIN 
-                      (SELECT Org_Name, Fiscal_Year, count(*) AS 'Legal_Refer' FROM MyData2 WHERE Capacity_Building_Type = 'Legal Referral' GROUP BY Org_Name, Fiscal_Year) AS b
-                      ON  b.Org_Name = a.Org_Name  AND b.Fiscal_Year = a.Fiscal_Year")
+ActivityData <- sqldf(
+  paste("SELECT a.Org_Name, a.Fiscal_Year, a.Site_Visit,",
+        "a.Knowledge_Exchange , a.Leveraging, a.Leveraging_Amount,",
+        "a.Phone_Call, a.Email, a.Additional, b.Legal_Refer",
+        "from ActivityData AS a LEFT JOIN",
+        "(SELECT Org_Name, Fiscal_Year, count(*) AS 'Legal_Refer'",
+        "FROM MyData2",
+        "WHERE Capacity_Building_Type = 'Legal Referral'",
+        "GROUP BY Org_Name, Fiscal_Year) AS b",
+        "ON  b.Org_Name = a.Org_Name  AND b.Fiscal_Year = a.Fiscal_Year",
+        sep=" "))
 
 stat.desc(ActivityData)
 
@@ -111,7 +173,7 @@ ActivityData[is.na(ActivityData)] <- 0
 ## Next steps: join OCI_subset and ActivityData, then run LEAPS data on new combined dataframe to find correlations
 
 ##rename the columns so they're easier to work with
-names(OCI_subset)
+# names(OCI_subset)
 OCI_subset<-OCI_subset %>%
   rename(Org_Name = Organization.Name,
          Fiscal_Year = Fiscal.Year)
@@ -141,15 +203,6 @@ MergedData_noshift<-MergedData_noshift %>%
 MergedData_noshift<-MergedData_noshift %>%
   mutate(ActivityCount=Site_Visit + Knowledge_Exchange + Leveraging +
            Phone_Call + Email + Additional + Legal_Refer)
-  
-# MergedData_noshift$ActivityCount <- with(MergedData_noshift,                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               
-#                                          ifelse(is.na(Site_Visit),0,Site_Visit) 
-#                                          + ifelse(is.na(Knowledge_Exchange),0,Knowledge_Exchange) 
-#                                          + ifelse(is.na(Leveraging),0,Leveraging)
-#                                          + ifelse(is.na(Phone_Call),0,Phone_Call)
-#                                          + ifelse(is.na(Email),0,Email)
-#                                          + ifelse(is.na(Additional),0,Additional)
-#                                          + ifelse(is.na(Legal_Refer),0,Legal_Refer))
 
 MergedData_shift<-MergedData_shift %>%
   mutate_at(c("Site_Visit", "Knowledge_Exchange", "Leveraging", "Phone_Call",
@@ -201,7 +254,8 @@ Children_Served <- regsubsets( Children.Served.Directly ~  Grant.Amount + Activi
                                + Leveraging + as.integer(Leveraging_Amount) + Additional + Legal_Refer + Year.of.Funding.Number.Only
                                ,data=MergedData_shift,method='forward')
 
-plot(Children_Served,scale = "adjr2",main="adjr2")
+## "figure margins too large"
+# plot(Children_Served,main="adjr2") #scale = "adjr2",main="adjr2")
 ## the adjusted R^2 for these variables are bad - not really a fit between the activities and the children directly served
 summary(glm(Children.Served.Directly ~ ActivityCount + Leveraging, data=MergedData_shift))
 
@@ -217,4 +271,5 @@ Outcome_Reg <- regsubsets( Outcome.Actual ~  Grant.Amount + ActivityCount + Emai
                            + Leveraging + as.integer(Leveraging_Amount) + Additional + Legal_Refer + Year.of.Funding.Number.Only
                            ,data=MergedData_shift,method='forward')
 
-plot(Outcome_Reg,scale = "adjr2",main="adjr2")
+## "figure margins too large"
+# plot(Outcome_Reg,scale = "adjr2",main="adjr2")
