@@ -8,6 +8,8 @@ if(!require(pastecs))
 library(dplyr)
 
 ##Read in the flat data. You may need to change the filepath below to match your environment
+
+
 NEW_DATA_DIR<-"../New Data/"
 MyData <- read.csv(file=paste(NEW_DATA_DIR, "OCI_file_flat.csv", sep=""),
                    header=TRUE)
